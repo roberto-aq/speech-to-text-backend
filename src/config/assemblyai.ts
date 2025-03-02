@@ -3,6 +3,13 @@ import path from 'path';
 import { AssemblyAI } from 'assemblyai';
 
 import { apiKeyStore } from './apiKeyStore';
+import {
+	AlignmentType,
+	Document,
+	Packer,
+	Paragraph,
+	TextRun,
+} from 'docx';
 
 export const getAssemblyClient = (): AssemblyAI => {
 	const apiKey = apiKeyStore.getApiKey();
@@ -36,20 +43,64 @@ export const speechToText = async (
 
 		// Definir la ruta de la carpeta y el archivo
 		const folderPath = path.join(process.cwd(), 'transcripciones');
-		const filePath = path.join(folderPath, 'transcripcion.txt');
-
 		// Crear la carpeta si no existe
 		if (!fs.existsSync(folderPath)) {
 			fs.mkdirSync(folderPath, { recursive: true });
 		}
 
-		// Guardar la transcripción en el archivo
-		fs.writeFileSync(filePath, transcript.text);
+		// 📝 Definir el nombre del archivo (mismo nombre del audio)
+		const filename = path.basename(
+			audioPath,
+			path.extname(audioPath)
+		);
+		const docxPath = path.join(folderPath, `${filename}.docx`);
 
-		console.log('Transcripción guardada en:', filePath);
+		// ✍️ Crear el documento de Word con la transcripción
+		const doc = new Document({
+			sections: [
+				{
+					children: [
+						new Paragraph({
+							children: [
+								new TextRun({
+									text: 'Transcripción',
+									bold: true,
+									size: 32,
+									font: 'Arial',
+								}),
+							],
+							alignment: AlignmentType.CENTER,
+							spacing: {
+								after: 200,
+							},
+						}),
+						// Transcripción
+						new Paragraph({
+							children: [
+								new TextRun({
+									text: transcript.text,
+									size: 24,
+									font: 'Arial',
+								}),
+							],
+							alignment: AlignmentType.JUSTIFIED,
+							spacing: {
+								after: 200,
+							},
+						}),
+					],
+				},
+			],
+		});
+
+		// Guardar el archivo .docx
+		const buffer = await Packer.toBuffer(doc);
+		fs.writeFileSync(docxPath, buffer);
+
+		console.log('✅ Transcripción guardada en:', docxPath);
 		return transcript.text;
 	} catch (error) {
-		console.error('Error al transcribir el audio:', error);
-		throw new Error('Error al transcribir el audio');
+		console.log(error);
+		throw error.message;
 	}
 };
