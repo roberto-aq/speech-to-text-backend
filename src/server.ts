@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
-import router from './router';
+import filesRouter from './routes/fileRouter';
+import settingsRouter from './routes/settingsRouter';
 
 const app = express();
 
@@ -10,7 +11,8 @@ app.use(express.json());
 app.use(cors());
 
 // Rutas
-app.use('/api/files', router);
+app.use('/api/files', filesRouter);
+app.use('/api/settings', settingsRouter)
 
 
 export default app;
