@@ -9,6 +9,8 @@ app.use(express.json());
 // Habilitar las cors
 app.use(cors());
 
-app.use('/api', router);
+// Rutas
+app.use('/api/files', router);
+
 
 export default app;
