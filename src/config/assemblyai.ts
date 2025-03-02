@@ -1,10 +1,18 @@
-import { AssemblyAI } from 'assemblyai';
 import fs from 'fs';
 import path from 'path';
+import { AssemblyAI } from 'assemblyai';
 
-const client = new AssemblyAI({
-	apiKey: 'ea448d67c74142998eb196e556de3ea0',
-});
+import { apiKeyStore } from './apiKeyStore';
+
+export const getAssemblyClient = (): AssemblyAI => {
+	const apiKey = apiKeyStore.getApiKey();
+
+	if (!apiKey) {
+		throw new Error('❌ API Key de AssemblyAI no configurada.');
+	}
+
+	return new AssemblyAI({ apiKey });
+};
 
 /**
  * Transcribe un archivo de audio utilizando AssemblyAI y guarda la transcripción en un archivo.
@@ -14,6 +22,8 @@ const client = new AssemblyAI({
 export const speechToText = async (
 	audioPath: string
 ): Promise<string> => {
+	const client = getAssemblyClient();
+
 	try {
 		// Leer el archivo de audio como un buffer
 		const audioBuffer = fs.readFileSync(audioPath);
