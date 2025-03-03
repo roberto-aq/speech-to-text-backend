@@ -10,8 +10,7 @@ const router = Router();
 router.get('/api-key', async (req: Request, res: Response) => {
 	res.status(200).json({
 		message: 'API Settings',
-		apiKeyEnv: process.env.ASSEMBLYAI_API_KEY,
-		apiKeyStore: apiKeyStore.getApiKey(),
+		apiKey: apiKeyStore.getApiKey(),
 	});
 });
 

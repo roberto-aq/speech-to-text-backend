@@ -19,6 +19,6 @@ const fileFilter = (
 // Middleware de multer
 export const upload = multer({
 	storage,
-	limits: { fileSize: 10 * 1024 * 1024 }, // Limita a 10MB
+	limits: { fileSize: 200 * 1024 * 1024 }, // Limita a 200MB
 	fileFilter,
 });
