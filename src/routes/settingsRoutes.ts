@@ -1,19 +1,16 @@
 import { Router } from 'express';
-import type { Request, Response } from 'express';
-import 'dotenv/config';
-import { apiKeyStore } from '../config/apiKeyStore';
+
 import { body } from 'express-validator';
 import { handleInputErrors } from '../middlewares/validation';
+import { SettingsController } from '../controllers/settingsController';
 
 const router = Router();
 
-router.get('/api-key', async (req: Request, res: Response) => {
-	res.status(200).json({
-		message: 'API Settings',
-		apiKey: apiKeyStore.getApiKey(),
-	});
-});
+// Importar e Inicializar el controlador
+const settingsController = new SettingsController();
 
+// * RUTAS
+router.get('/api-key', settingsController.getApiKey);
 router.post(
 	'/update-api-key',
 	body('newApiKey')
@@ -21,15 +18,7 @@ router.post(
 		.isLength({ min: 1 })
 		.withMessage('❌ Debes proporcionar una nueva API Key'),
 	handleInputErrors,
-	(req: Request, res: Response) => {
-		const { newApiKey } = req.body;
-
-		apiKeyStore.setApiKey(newApiKey);
-		res.status(200).json({
-			message:
-				'✅ API Key actualizada correctamente. Y reemplazada en el .env',
-		});
-	}
+	settingsController.updateApiKey
 );
 
 export default router;
