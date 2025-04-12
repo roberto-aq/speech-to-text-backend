@@ -78,7 +78,7 @@ export const speechToText = async (
 						new Paragraph({
 							children: [
 								new TextRun({
-									text: transcript.text,
+									text: transcript.text ?? '',
 									size: 24,
 									font: 'Arial',
 								}),
@@ -98,8 +98,8 @@ export const speechToText = async (
 		fs.writeFileSync(docxPath, buffer);
 
 		console.log('✅ Transcripción guardada en:', docxPath);
-		return transcript.text;
-	} catch (error) {
+		return transcript.text ?? '';
+	} catch (error: any) {
 		console.log(error);
 		throw error.message;
 	}

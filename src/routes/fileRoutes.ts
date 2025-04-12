@@ -30,7 +30,7 @@ router.post(
 				size: file.size,
 				data: transcribedText,
 			});
-		} catch (error) {
+		} catch (error: any) {
 			if (error.includes('unauthorized')) {
 				res.status(401).json({
 					message:
@@ -45,6 +45,5 @@ router.post(
 		}
 	}
 );
-
 
 export default router;

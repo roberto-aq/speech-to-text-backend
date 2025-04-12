@@ -1,19 +1,35 @@
-import express from 'express';
 import cors from 'cors';
-import filesRouter from './routes/fileRouter';
-import settingsRouter from './routes/settingsRouter';
-import transcriptionsRouter from './routes/transcriptionRouter';
 
-const app = express();
+import express, { Router } from 'express';
 
-// Habilitar el body
-app.use(express.json());
-// Habilitar las cors
-app.use(cors());
+interface Options {
+	port: number;
+	public_path?: string;
+	routes: Router;
+}
 
-// Rutas
-app.use('/api/files', filesRouter);
-app.use('/api/settings', settingsRouter);
-app.use('/api/transcriptions', transcriptionsRouter);
+export class Server {
+	private app: express.Application = express();
+	private readonly port: number;
+	private readonly routes: Router;
 
-export default app;
+	constructor({ port, routes }: Options) {
+		this.port = port;
+		this.routes = routes;
+	}
+
+	async start() {
+		// * Middlewares
+		this.app.use(express.json());
+		this.app.use(express.urlencoded({ extended: true }));
+		// Habilitar las cors
+		this.app.use(cors());
+
+		// * Routes
+		this.app.use(this.routes);
+
+		this.app.listen(this.port, () => {
+			console.log(`Server is running on port ${this.port}`);
+		});
+	}
+}
