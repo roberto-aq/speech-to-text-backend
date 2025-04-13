@@ -89,6 +89,7 @@ export class TranscriptionController {
 		res.status(200).json({
 			message: 'Archivo encontrado',
 			url: file.publicUrl,
+			filename: transcription.filename,
 		});
 	}
 
