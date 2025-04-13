@@ -48,6 +48,12 @@ export function MapErrosSupabase(error: unknown): {
 					message: '❌ Petición inválida.',
 				};
 
+			case 'PGRST116':
+				return {
+					status: 404,
+					message: '📄 El registro no fue encontrado.',
+				};
+
 			default:
 				return {
 					status: 500,

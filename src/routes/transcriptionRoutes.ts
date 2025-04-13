@@ -7,21 +7,22 @@ const router = Router();
 // Importar e inicializar controlador
 const transcriptionController = new TranscriptionController();
 
-router.get('/', transcriptionController.getTranscriptions);
-
+router.get(
+	'/:userId',
+	transcriptionController.getTranscriptionsByUserId
+);
 /**
  * 📌 Descargar transcripción
  */
 router.get(
-	'/download/:filename',
+	'/download/:transcriptionId',
 	transcriptionController.downloadTranscription
 );
-
 /**
  * 📌 Eliminar transcripción
  */
 router.delete(
-	'/delete/:filename',
+	'/:transcriptionId',
 	transcriptionController.deleteTranscription
 );
 

@@ -1,6 +1,8 @@
 import type { Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
+import { supabase } from '../lib/supabase';
+import { MapErrosSupabase } from '../utils/mapErrorsSupabase';
 
 // Directorio de subida de archivos
 const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -14,36 +16,41 @@ export class TranscriptionController {
 	 * @returns {Promise<void>}
 	 * @description Este método obtiene una lista de transcripciones disponibles en el directorio de transcripciones.
 	 */
-	public async getTranscriptions(req: Request, res: Response) {
-		try {
-			if (!fs.existsSync(transcriptionsDir)) {
-				res.status(200).json({
-					message: 'No hay transcripciones disponibles.',
-					data: [],
-				});
+	public async getTranscriptionsByUserId(
+		req: Request,
+		res: Response
+	) {
+		const userId = req.params.userId;
 
+		if (!userId) {
+			res
+				.status(400)
+				.json({ error: 'ID de usuario no proporcionado' });
+			return;
+		}
+
+		try {
+			const { data: transcriptions, error } = await supabase
+				.from('transcripciones')
+				.select('*')
+				.eq('user_id', userId)
+				.order('created_at', { ascending: false });
+
+			if (error) {
+				console.log('Error al obtener transcripciones:', error);
+				const { status, message } = MapErrosSupabase(error);
+				res.status(status).json({ error: message });
 				return;
 			}
 
-			const files = fs
-				.readdirSync(transcriptionsDir)
-				.filter(file => file.endsWith('.docx'))
-				.map(file => ({
-					filename: file,
-					createdAt: fs.statSync(path.join(transcriptionsDir, file))
-						.birthtime,
-				}))
-				.sort((a, b) => +b.createdAt - +a.createdAt);
-
-			res.status(200).json({
-				message: '✅ Transcripciones disponibles',
-				data: files,
-			});
+			res.status(200).json(transcriptions);
+			return;
 		} catch (error) {
-			console.error('❌ Error obteniendo transcripciones:', error);
-			res
-				.status(500)
-				.json({ error: 'Error al obtener las transcripciones' });
+			console.error('Error servidor:', error);
+			res.status(500).json({
+				error: 'Error inesperado - Revisar logs',
+			});
+			return;
 		}
 	}
 
@@ -54,71 +61,94 @@ export class TranscriptionController {
 	 * @description Este método descarga una transcripción específica.
 	 */
 	public async downloadTranscription(req: Request, res: Response) {
-		const { filename } = req.params;
-		const filePath = path.join(transcriptionsDir, filename);
+		const { transcriptionId } = req.params;
+		const { userId } = req.query as { userId: string };
 
-		if (!fs.existsSync(filePath)) {
+		const { data: transcription, error } = await supabase
+			.from('transcripciones')
+			.select('filename, user_id')
+			.eq('id', transcriptionId)
+			.single();
+
+		if (error) {
+			console.error('Error al obtener el archivo:', error);
+			const { status, message } = MapErrosSupabase(error);
+			res.status(status).json({ error: message });
+			return;
+		}
+		const filePath = `${userId}/${transcription.filename}`;
+		const { data: file } = supabase.storage
+			.from('transcripciones')
+			.getPublicUrl(filePath);
+
+		if (!file) {
 			res.status(404).json({ error: 'Archivo no encontrado' });
+			return;
 		}
 
-		res.download(filePath, filename, err => {
-			if (err) {
-				console.error('❌ Error al descargar el archivo:', err);
-				res
-					.status(500)
-					.json({ error: 'Error al descargar el archivo' });
-			}
+		res.status(200).json({
+			message: 'Archivo encontrado',
+			url: file.publicUrl,
 		});
 	}
 
 	public async deleteTranscription(req: Request, res: Response) {
+		const { transcriptionId } = req.params;
+		// const { userId } = req.query as { userId: string };
+
 		try {
-			const { filename } = req.params;
+			// 1. Obtener la transcripción
+			const { data: transcription, error: getError } = await supabase
+				.from('transcripciones')
+				.select('id, filename, user_id')
+				.eq('id', transcriptionId)
+				.single();
 
-			// 🚨 Validar que el filename no contenga rutas maliciosas
-			if (filename.includes('..') || path.isAbsolute(filename)) {
-				res.status(400).json({ error: 'Nombre de archivo inválido' });
+			if (getError || !transcription) {
+				console.error('Error al obtener transcripción:', getError);
+				const { status, message } = MapErrosSupabase(getError);
+				res.status(status).json({ error: message });
 				return;
 			}
 
-			const filePath = path.join(transcriptionsDir, filename);
-			const resolvedPath = path.resolve(filePath);
+			const filePath = `${transcription.user_id}/${transcription.filename}`;
 
-			// Validar que el archivo esté dentro del directorio permitido
-			if (!resolvedPath.startsWith(path.resolve(transcriptionsDir))) {
-				res.status(403).json({ error: 'Acceso no permitido' });
+			// 2. Eliminar archivo del bucket
+			const { error: storageError } = await supabase.storage
+				.from('transcripciones')
+				.remove([filePath]);
+
+			if (storageError) {
+				console.error('Error al eliminar archivo:', storageError);
+				const { status, message } = MapErrosSupabase(storageError);
+				res.status(status).json({ error: message });
 				return;
 			}
 
-			if (!fs.existsSync(resolvedPath)) {
-				res.status(404).json({ error: 'Archivo no encontrado' });
+			// 3. Eliminar registro de la base de datos
+			const { error: dbError } = await supabase
+				.from('transcripciones')
+				.delete()
+				.eq('id', transcriptionId);
+
+			if (dbError) {
+				console.error('Error al eliminar transcripción:', dbError);
+				const { status, message } = MapErrosSupabase(dbError);
+				res.status(status).json({ error: message });
 				return;
 			}
-
-			fs.unlinkSync(resolvedPath);
-
-			// 🔊 Eliminar audios relacionados en "uploads/"
-			const baseName = path.parse(filename).name;
-			const audioFiles = fs.readdirSync(uploadsDir);
-			const deletedAudios: string[] = [];
-
-			audioFiles.forEach(file => {
-				const nameWithoutExt = path.parse(file).name;
-				if (nameWithoutExt === baseName) {
-					const audioPath = path.join(uploadsDir, file);
-					fs.unlinkSync(audioPath);
-					deletedAudios.push(file);
-				}
-			});
 
 			res.status(200).json({
-				message: `✅ Transcripción "${filename}" eliminada.`,
-				audioDeleted: deletedAudios.length > 0,
-				deletedAudios,
+				message: `✅ Transcripción con el nombre de: "${transcription.filename}" fue eliminada exitosamente`,
+				transcriptionId: transcription.id,
 			});
+			return;
 		} catch (error) {
-			console.error('❌ Error al eliminar el archivo:', error);
-			res.status(500).json({ error: 'Error al eliminar el archivo' });
+			console.error('Error al eliminar transcripción:', error);
+			res.status(500).json({
+				error: 'Error inesperado al eliminar la transcripción',
+			});
+			return;
 		}
 	}
 }
