@@ -1,5 +1,4 @@
 import fs from 'fs';
-import path from 'path';
 import { AssemblyAI } from 'assemblyai';
 
 import { apiKeyStore } from './apiKeyStore';
@@ -10,6 +9,13 @@ import {
 	Paragraph,
 	TextRun,
 } from 'docx';
+
+interface TranscriptionResult {
+	text: string;
+	buffer: Buffer;
+	filename: string;
+	duration_seconds: number | null;
+}
 
 export const getAssemblyClient = (): AssemblyAI => {
 	const apiKey = apiKeyStore.getApiKey();
@@ -27,35 +33,24 @@ export const getAssemblyClient = (): AssemblyAI => {
  * @returns {Promise<string>} - Texto transcrito
  */
 export const speechToText = async (
-	audioPath: string
-): Promise<string> => {
+	audioBuffer: Buffer,
+	originalFileName: string
+): Promise<TranscriptionResult> => {
 	const client = getAssemblyClient();
 
 	try {
-		// Leer el archivo de audio como un buffer
-		const audioBuffer = fs.readFileSync(audioPath);
-
 		// Transcribir el audio
 		const transcript = await client.transcripts.transcribe({
 			audio: audioBuffer,
 			language_code: 'es',
 		});
 
-		// Definir la ruta de la carpeta y el archivo
-		const folderPath = path.join(process.cwd(), 'transcripciones');
-		// Crear la carpeta si no existe
-		if (!fs.existsSync(folderPath)) {
-			fs.mkdirSync(folderPath, { recursive: true });
-		}
+		const baseName = originalFileName.replace(/\.[^/.]+$/, ''); // elimina extensión
+		const text = transcript.text ?? '';
+		const duration_seconds = transcript.audio_duration ?? null;
+		const filename = `${baseName}-${Date.now()}.docx`;
 
-		// 📝 Definir el nombre del archivo (mismo nombre del audio)
-		const filename = path.basename(
-			audioPath,
-			path.extname(audioPath)
-		);
-		const docxPath = path.join(folderPath, `${filename}.docx`);
-
-		// ✍️ Crear el documento de Word con la transcripción
+		// 📝 Crear el documento de Word
 		const doc = new Document({
 			sections: [
 				{
@@ -70,35 +65,32 @@ export const speechToText = async (
 								}),
 							],
 							alignment: AlignmentType.CENTER,
-							spacing: {
-								after: 200,
-							},
+							spacing: { after: 200 },
 						}),
-						// Transcripción
 						new Paragraph({
 							children: [
 								new TextRun({
-									text: transcript.text ?? '',
+									text,
 									size: 24,
 									font: 'Arial',
 								}),
 							],
 							alignment: AlignmentType.JUSTIFIED,
-							spacing: {
-								after: 200,
-							},
+							spacing: { after: 200 },
 						}),
 					],
 				},
 			],
 		});
 
-		// Guardar el archivo .docx
 		const buffer = await Packer.toBuffer(doc);
-		fs.writeFileSync(docxPath, buffer);
 
-		console.log('✅ Transcripción guardada en:', docxPath);
-		return transcript.text ?? '';
+		return {
+			text,
+			buffer,
+			filename,
+			duration_seconds,
+		};
 	} catch (error: any) {
 		console.log(error);
 		throw error.message;
